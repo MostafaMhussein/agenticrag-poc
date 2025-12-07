@@ -1,0 +1,102 @@
+# Docker Compose for Agentic RAG POC
+# Compatible with Windows, macOS, and Linux
+# Includes PostgreSQL with pgvector and optional services
+
+version: '3.8'
+
+services:
+  # PostgreSQL with pgvector extension
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: rag-postgres
+    environment:
+      POSTGRES_DB: ${DB_NAME:-rag_db}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    networks:
+      - rag-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # RAG API Service
+  rag-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rag-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-password}@postgres:5432/${DB_NAME:-rag_db}
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME:-rag_db}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-password}
+      # Windows Docker Desktop automatically resolves host.docker.internal
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      - OLLAMA_LLM_MODEL=${OLLAMA_LLM_MODEL:-gemma3:4b}
+      - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-nomic-embed-text}
+      - PHOENIX_ENABLED=${PHOENIX_ENABLED:-false}
+      - PHOENIX_HOST=phoenix
+      - PHOENIX_PORT=6006
+    ports:
+      - "${API_PORT:-8000}:8000"
+    volumes:
+      # Use forward slashes even on Windows for Docker
+      - ./data:/app/data
+    networks:
+      - rag-network
+    restart: unless-stopped
+
+  # Arize Phoenix for observability (optional)
+  phoenix:
+    image: arizephoenix/phoenix:latest
+    container_name: rag-phoenix
+    ports:
+      - "${PHOENIX_PORT:-6006}:6006"
+    networks:
+      - rag-network
+    profiles:
+      - observability
+    restart: unless-stopped
+
+  # OpenWebUI for chat interface (optional)
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: rag-webui
+    depends_on:
+      - rag-api
+    environment:
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      - OPENAI_API_BASE_URL=http://rag-api:8000/v1
+      - OPENAI_API_KEY=not-needed
+    ports:
+      - "${WEBUI_PORT:-3000}:8080"
+    volumes:
+      - open-webui:/app/backend/data
+    networks:
+      - rag-network
+    profiles:
+      - webui
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+  open-webui:
+    driver: local
+
+networks:
+  rag-network:
+    driver: bridge

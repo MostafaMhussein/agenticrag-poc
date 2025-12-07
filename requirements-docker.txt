@@ -1,0 +1,30 @@
+# Agentic RAG POC - Docker Requirements
+# Minimal dependencies for production deployment
+
+# Core Framework
+crewai>=0.51.0
+crewai-tools>=0.8.0
+
+# LlamaIndex
+llama-index>=0.10.0
+llama-index-core>=0.10.0
+llama-index-llms-ollama>=0.1.0
+llama-index-embeddings-ollama>=0.1.0
+llama-index-vector-stores-postgres>=0.1.0
+
+# Database
+psycopg2-binary>=2.9.9
+asyncpg>=0.29.0
+pgvector>=0.2.0
+sqlalchemy>=2.0.0
+
+# API Server
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+pydantic>=2.0.0
+
+# Utilities
+python-dotenv>=1.0.0
+tqdm>=4.66.0
+tenacity>=8.2.0
+httpx>=0.26.0
